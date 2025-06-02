@@ -7,17 +7,15 @@ import { removeImageFile } from "../helpers";
  * @param fastify 
  * @param data {
  *  name: string
- *  code?: string
- *  description?: string
- *  variation?: string
- *  color?: string
- *  colorId?: number
- *  size?: number
- *  finish?: number
- *  thickness?: string
- *  tags: number[]
+ *  code: string
+ *  description: string
+ *  color: string
+ *  price: number
+ *  remarks: string
+ *  material: number[]
  *  categories: number[]
- *  sequence?: number
+ *  sequence: number
+ * 
  * }
  * @returns {
  *  code: number,
@@ -31,60 +29,35 @@ export const addProduct = async (fastify: FastifyInstance, data: any) => {
     let finishStr = null;
 
     try {
-        let checkSql = `SELECT p.id FROM products p WHERE p.name = \'${data.name}\' AND (p.code = \'${data.code}\' OR p.color = \'${data.color}\');`
+        let checkSql = `SELECT p.id FROM prds p WHERE p.name = \'${data.name}\' AND p.code = \'${data.code}\';`
         const [rows] = await connection.query(checkSql);
 
         if (rows && rows.length > 0) {
             if (rows[0].id) {
                 res = {
                     code: 409,
-                    message: 'Product with the same name and code or color existed.'
+                    message: 'Product with the same name and code existed.'
                 }
                 return;
             }
         }
 
-        if (data.size) {
-            const [sizes] = await connection.query('SELECT name, value FROM sizes WHERE id=?', [data.size]);
-            sizeStr = sizes[0].value;
-        }
-
-        if (data.finish) {
-            const [finishes] = await connection.query('SELECT name, value FROM finishes WHERE id=?', [data.finish]);
-            finishStr = finishes[0].name;
-        }
-
-        let sql = "INSERT INTO products (name,code,description,variation,color,size,finish,thickness,sequence) VALUES ";
-        sql += `('${data.name}','${data.code}','${data.description}','${data.variation}','${data.color}','${sizeStr}','${finishStr}','${data.thickness}',${data.sequence || null});`
-        sql = sql.replaceAll("'null'", "null");
-        sql = sql.replaceAll("'undefined'", "null");
+        let sql = "INSERT INTO prds (name,code,description,color,material,categories,sequence,remarks,price) VALUES ";
+        sql += `('${data.name}','${data.code}','${data.description}','${data.color}','${data.material}','${data.categories}','${data.sequence}','${data.remarks}',${data.sequence});`
         // result
         // {
         //      fieldCount, affectedRows, insertId, info, serverStatus, warningStatus, changesRows
         // }
         const [result] = await connection.execute(sql);
+        // // Assign categories
+        // if (data.categories && data.categories.length > 0) {
+        //     await assignProductToCategories(fastify, { productId: result.insertId, categories: data.categories });
+        // }
 
-        if (data.colorId) {
-            await connection.execute("INSERT INTO productsColors (productId,colorId) VALUES (?,?)", [result.insertId, data.colorId]);
-        }
-
-        if (data.size) {
-            await connection.execute('INSERT INTO productsSizes (productId,sizeId) VALUES (?,?)', [result.insertId, data.size]);
-        }
-
-        if (data.finish) {
-            await connection.execute('INSERT INTO productsFinishes (productId,finishId) VALUES (?,?)', [result.insertId, data.finish]);
-        }
-
-        // Assign categories
-        if (data.categories && data.categories.length > 0) {
-            await assignProductToCategories(fastify, { productId: result.insertId, categories: data.categories });
-        }
-
-        // Assign tags
-        if (data.tags && data.tags.length > 0) {
-            await assignProductToTags(fastify, { productId: result.insertId, tags: data.tags });
-        }
+        // // Assign tags
+        // if (data.tags && data.tags.length > 0) {
+        //     await assignProductToTags(fastify, { productId: result.insertId, tags: data.tags });
+        // }
 
         res = result?.insertId ? {
             code: 201,
@@ -316,17 +289,14 @@ export const removeTagsForProduct = async (fastify: FastifyInstance, data: any) 
  * @param data {
  *  id: number
  *  name: string
- *  code?: string
- *  description?: string
- *  variation?: string
- *  color?: string
- *  colorId?: number
- *  size?: number
- *  finish?: number
- *  thickness?: string
- *  tags: number[]
+ *  code: string
+ *  description: string
+ *  color: string
+ *  price: number
+ *  remarks: string
+ *  material: number[]
  *  categories: number[]
- *  sequence?: number
+ *  sequence: number
  *  notDeletedImageUrls?: string[]
  * }
  * @returns {
@@ -341,113 +311,113 @@ export const updateProduct = async (fastify: FastifyInstance, data: any) => {
     let finishStr = null;
 
     try {
-        const [rows] = await connection.query('SELECT p.id, p.code, p.color, s.id AS size, f.id AS finish FROM products p LEFT JOIN sizes s ON s.value = p.size LEFT JOIN finishes f ON f.name = p.finish WHERE p.id=?', [data.id]);
+        const [rows] = await connection.query('SELECT p.id, p.code, p.name WHERE p.id=?', [data.id]);
 
         if (rows && rows.length > 0) {
             if (rows[0].id) {
                 // If code is NULL, color is used as productCode in productsImages
                 // Thus color is not changeable
-                if (data.color && data.color !== rows[0].color) {
-                    if (!rows[0].code) {
-                        res = {
-                            code: 400,
-                            message: "Color is not changeable."
-                        }
-                        return;
-                    }
+                // if (data.color && data.color !== rows[0].color) {
+                //     if (!rows[0].code) {
+                //         res = {
+                //             code: 400,
+                //             message: "Color is not changeable."
+                //         }
+                //         return;
+                //     }
 
-                    await connection.execute("UPDATE products SET color=? WHERE id=?", [data.color || null, data.id]);
-                }
+                //     await connection.execute("UPDATE products SET color=? WHERE id=?", [data.color || null, data.id]);
+                // }
 
-                const [colors] = await connection.query("SELECT colorId FROM productsColors WHERE productId=?", [data.id]);
-                if (data.colorId) {
-                    if (colors && colors.length > 0) {
-                        if (data.colorId !== colors[0].colorId) {
-                            // Remove existing color
-                            await connection.execute('DELETE FROM productsColors WHERE productId=?', [rows[0].id]);
-                        }
-                    }
-                    else {
-                        // Insert new color
-                        await connection.execute('INSERT INTO productsColors (productId,colorId) VALUES (?,?)', [data.id, data.colorId]);
-                    }
-                }
-                else if (!data.colorId) {
-                    if (colors && colors.length > 0) {
-                        // Remove existing color
-                        await connection.execute('DELETE FROM productsColors WHERE productId=?', [rows[0].id]);
-                    }
-                }
+                // const [colors] = await connection.query("SELECT colorId FROM productsColors WHERE productId=?", [data.id]);
+                // if (data.colorId) {
+                //     if (colors && colors.length > 0) {
+                //         if (data.colorId !== colors[0].colorId) {
+                //             // Remove existing color
+                //             await connection.execute('DELETE FROM productsColors WHERE productId=?', [rows[0].id]);
+                //         }
+                //     }
+                //     else {
+                //         // Insert new color
+                //         await connection.execute('INSERT INTO productsColors (productId,colorId) VALUES (?,?)', [data.id, data.colorId]);
+                //     }
+                // }
+                // else if (!data.colorId) {
+                //     if (colors && colors.length > 0) {
+                //         // Remove existing color
+                //         await connection.execute('DELETE FROM productsColors WHERE productId=?', [rows[0].id]);
+                //     }
+                // }
 
-                if (data.size && data.size !== rows[0].size) {
-                    // Remove existing size
-                    await connection.execute('DELETE FROM productsSizes WHERE productId=? AND sizeId=?', [rows[0].id, rows[0].size]);
-                    // Insert new size
-                    await connection.execute('INSERT INTO productsSizes (productId,sizeId) VALUES (?,?)', [data.id, data.size]);
-                }
-                else if (!data.size && rows[0].size) {
-                    // Remove existing size
-                    await connection.execute('DELETE FROM productsSizes WHERE productId=? AND sizeId=?', [rows[0].id, rows[0].size]);
-                }
+                // if (data.size && data.size !== rows[0].size) {
+                //     // Remove existing size
+                //     await connection.execute('DELETE FROM productsSizes WHERE productId=? AND sizeId=?', [rows[0].id, rows[0].size]);
+                //     // Insert new size
+                //     await connection.execute('INSERT INTO productsSizes (productId,sizeId) VALUES (?,?)', [data.id, data.size]);
+                // }
+                // else if (!data.size && rows[0].size) {
+                //     // Remove existing size
+                //     await connection.execute('DELETE FROM productsSizes WHERE productId=? AND sizeId=?', [rows[0].id, rows[0].size]);
+                // }
 
-                if (data.finish && data.finish !== rows[0].finish) {
-                    // Remove existing finish
-                    await connection.execute('DELETE FROM productsFinishes WHERE productId=? AND finishId=?', [rows[0].id, rows[0].finish]);
-                    // Insert new finish
-                    await connection.execute('INSERT INTO productsFinishes (productId,finishId) VALUES (?,?)', [data.id, data.finish]);
-                }
-                else if (!data.finish && rows[0].finish) {
-                    // Remove existing finish
-                    await connection.execute('DELETE FROM productsFinishes WHERE productId=? AND finishId=?', [rows[0].id, rows[0].finish]);
-                }
+                // if (data.finish && data.finish !== rows[0].finish) {
+                //     // Remove existing finish
+                //     await connection.execute('DELETE FROM productsFinishes WHERE productId=? AND finishId=?', [rows[0].id, rows[0].finish]);
+                //     // Insert new finish
+                //     await connection.execute('INSERT INTO productsFinishes (productId,finishId) VALUES (?,?)', [data.id, data.finish]);
+                // }
+                // else if (!data.finish && rows[0].finish) {
+                //     // Remove existing finish
+                //     await connection.execute('DELETE FROM productsFinishes WHERE productId=? AND finishId=?', [rows[0].id, rows[0].finish]);
+                // }
 
                 // Remove and assign categories
-                const [categories] = await connection.query('SELECT categoryId FROM productsCategories WHERE productId=?', [rows[0].id]);
-                let addCategories = [];
-                let deleteCategories = [];
+                // const [categories] = await connection.query('SELECT categoryId FROM productsCategories WHERE productId=?', [rows[0].id]);
+                // let addCategories = [];
+                // let deleteCategories = [];
 
-                if (data.categories && data.categories.length > 0) {
-                    if (categories && categories.length > 0) {
-                        addCategories = data.categories.filter((x: number) => !categories.find((y: any) => y.categoryId === x));
-                        const deletedAry = categories.filter((x: any) => !data.categories.find((y: number) => x.categoryId === y));
-                        deleteCategories = deletedAry.length > 0 ? deletedAry.map((x: any) => x.categoryId) : [];
-                    }
-                    else {
-                        addCategories = data.categories;
-                    }
-                }
-                else {
-                    if (categories && categories.length > 0) {
-                        deleteCategories = categories.map((x: any) => x.categoryId);
-                    }
-                }
+                // if (data.categories && data.categories.length > 0) {
+                //     if (categories && categories.length > 0) {
+                //         addCategories = data.categories.filter((x: number) => !categories.find((y: any) => y.categoryId === x));
+                //         const deletedAry = categories.filter((x: any) => !data.categories.find((y: number) => x.categoryId === y));
+                //         deleteCategories = deletedAry.length > 0 ? deletedAry.map((x: any) => x.categoryId) : [];
+                //     }
+                //     else {
+                //         addCategories = data.categories;
+                //     }
+                // }
+                // else {
+                //     if (categories && categories.length > 0) {
+                //         deleteCategories = categories.map((x: any) => x.categoryId);
+                //     }
+                // }
 
-                if (addCategories.length > 0) await assignProductToCategories(fastify, { productId: rows[0].id, categories: addCategories });
-                if (deleteCategories.length > 0) await removeCategoriesForProduct(fastify, { productId: rows[0].id, categories: deleteCategories });
+                // if (addCategories.length > 0) await assignProductToCategories(fastify, { productId: rows[0].id, categories: addCategories });
+                // if (deleteCategories.length > 0) await removeCategoriesForProduct(fastify, { productId: rows[0].id, categories: deleteCategories });
 
                 // Remove and assign tags
-                const [tags] = await connection.query('SELECT tagId FROM productsTags WHERE productId=?', [rows[0].id]);
-                let addTags = [];
-                let deleteTags = [];
+                // const [tags] = await connection.query('SELECT tagId FROM productsTags WHERE productId=?', [rows[0].id]);
+                // let addTags = [];
+                // let deleteTags = [];
 
-                if (data.tags && data.tags.length > 0) {
-                    if (tags && tags.length > 0) {
-                        addTags = data.tags.filter((x: number) => !tags.find((y: any) => y.tagId === x));
-                        const deletedAry = tags.filter((x: any) => !data.tags.find((y: number) => x.tagId === y));
-                        deleteTags = deletedAry.length > 0 ? deletedAry.map((x: any) => x.tagId) : [];
-                    }
-                    else {
-                        addTags = data.tags;
-                    }
-                }
-                else {
-                    if (tags && tags.length > 0) {
-                        deleteTags = tags.map((x: any) => x.tagId);
-                    }
-                }
+                // if (data.tags && data.tags.length > 0) {
+                //     if (tags && tags.length > 0) {
+                //         addTags = data.tags.filter((x: number) => !tags.find((y: any) => y.tagId === x));
+                //         const deletedAry = tags.filter((x: any) => !data.tags.find((y: number) => x.tagId === y));
+                //         deleteTags = deletedAry.length > 0 ? deletedAry.map((x: any) => x.tagId) : [];
+                //     }
+                //     else {
+                //         addTags = data.tags;
+                //     }
+                // }
+                // else {
+                //     if (tags && tags.length > 0) {
+                //         deleteTags = tags.map((x: any) => x.tagId);
+                //     }
+                // }
 
-                if (addTags.length > 0) await assignProductToTags(fastify, { productId: rows[0].id, tags: addTags });
-                if (deleteTags.length > 0) await removeTagsForProduct(fastify, { productId: rows[0].id, tags: deleteTags });
+                // if (addTags.length > 0) await assignProductToTags(fastify, { productId: rows[0].id, tags: addTags });
+                // if (deleteTags.length > 0) await removeTagsForProduct(fastify, { productId: rows[0].id, tags: deleteTags });
 
                 // Handle product images deletion
                 const [images] = await connection.query('SELECT * FROM productsImages WHERE productId=?', [rows[0].id]);
