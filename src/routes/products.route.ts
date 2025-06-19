@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { addProduct, assignProductToCategories, assignProductToTags, getProductDetailsById, getProducts, removeCategoriesForProduct, removeProduct, removeProducts, removeTagsForProduct, updateProduct } from "../functions";
+import { addProduct, assignProductToCategories, assignProductToColors, assignProductToSizes, removeCategoriesForProduct, removeColorsForProduct, removeProduct, removeSizesForProduct, setSoldOutStatus, updateDiscountPrice, updateOnSalesStatus, updateProduct } from "../functions";
 
 export async function productsRoute(fastify: FastifyInstance) {
     fastify.post("/add-product", async (request, reply) => {
@@ -7,13 +7,9 @@ export async function productsRoute(fastify: FastifyInstance) {
         reply.code(result?.code!).send({ message: result?.message, id: result?.id });
     });
 
-    fastify.get("/all-products", async (request, reply) => {
-        return await getProducts(fastify);
-    });
-
-    fastify.get("/product-details/:id", async (request, reply) => {
-        const { id }: any = request.params;
-        return await getProductDetailsById(fastify, id);
+    fastify.post("/set-sold-out-status", async (request, reply) => {
+        const result = await setSoldOutStatus(fastify, request.body);
+        reply.code(result?.code!).send({ message: result?.message });
     });
 
     fastify.post("/update-product", async (request, reply) => {
@@ -27,18 +23,18 @@ export async function productsRoute(fastify: FastifyInstance) {
         reply.code(result?.code!).send({ message: result?.message });
     });
 
-    fastify.post("/delete-products", async (request, reply) => {
-        const result = await removeProducts(fastify, request.body);
-        reply.code(result?.code!).send({ message: result?.message });
-    });
-
     fastify.post("/assign-product-categories", async (request, reply) => {
         const result = await assignProductToCategories(fastify, request.body);
         reply.code(result?.code!).send({ message: result?.message });
     });
 
-    fastify.post("/assign-product-tags", async (request, reply) => {
-        const result = await assignProductToTags(fastify, request.body);
+    fastify.post("/assign-product-colors", async (request, reply) => {
+        const result = await assignProductToColors(fastify, request.body);
+        reply.code(result?.code!).send({ message: result?.message });
+    });
+
+    fastify.post("/assign-product-sizes", async (request, reply) => {
+        const result = await assignProductToSizes(fastify, request.body);
         reply.code(result?.code!).send({ message: result?.message });
     });
 
@@ -47,8 +43,24 @@ export async function productsRoute(fastify: FastifyInstance) {
         reply.code(result?.code!).send({ message: result?.message });
     });
 
-    fastify.post("/remove-product-tags", async (request, reply) => {
-        const result = await removeTagsForProduct(fastify, request.body);
+    fastify.post("/remove-product-sizes", async (request, reply) => {
+        const result = await removeSizesForProduct(fastify, request.body);
+        reply.code(result?.code!).send({ message: result?.message });
+    });
+
+    fastify.post("/remove-product-colors", async (request, reply) => {
+        const result = await removeColorsForProduct(fastify, request.body);
+        reply.code(result?.code!).send({ message: result?.message });
+    });
+
+    fastify.post("/update-on-sales", async (request, reply) => {
+        const { id, status } = request.body as { id: number; status: boolean | number };
+        const result = await updateOnSalesStatus(fastify, id, status);
+        reply.code(result?.code!).send({ message: result?.message });
+    });
+
+    fastify.post("/update-discount-price", async (request, reply) => {
+        const result = await updateDiscountPrice(fastify, request.body);
         reply.code(result?.code!).send({ message: result?.message });
     });
 }

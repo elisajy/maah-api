@@ -1,49 +1,48 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.tagsRoute = tagsRoute;
-const functions_1 = require("../functions");
-async function tagsRoute(fastify) {
-    fastify.get("/all-tags", async (request, reply) => {
-        return await (0, functions_1.getAllTags)(fastify);
-    });
-    fastify.get("/all-tags-no-level", async (request, reply) => {
-        return await (0, functions_1.getAllTagsNoLevel)(fastify);
-    });
-    fastify.get("/main-tags-no-sub", async (request, reply) => {
-        return await (0, functions_1.getMainTagsWithoutSub)(fastify);
-    });
-    fastify.get("/tag-details/:id", async (request, reply) => {
-        const { id } = request.params;
-        return await (0, functions_1.getTagDetailsById)(fastify, id);
-    });
-    fastify.post("/add-tag", async (request, reply) => {
-        const result = await (0, functions_1.createTag)(fastify, request.body);
-        reply.code(result?.code).send({ message: result?.message });
-    });
-    fastify.post("/add-sub-tags", async (request, reply) => {
-        const result = await (0, functions_1.addSubTags)(fastify, request.body);
-        reply.code(result?.code).send({ message: result?.message });
-    });
-    fastify.post("/update-tag", async (request, reply) => {
-        const result = await (0, functions_1.updateTag)(fastify, request.body);
-        reply.code(result?.code).send({ message: result?.message });
-    });
-    fastify.get("/isTagDeletable/:id", async (request, reply) => {
-        const { id } = request.params;
-        return !(await (0, functions_1.areProductsExistedUnderTag)(fastify, id));
-    });
-    fastify.post("/delete-tag/:id", async (request, reply) => {
-        const { id } = request.params;
-        const result = await (0, functions_1.deleteTag)(fastify, id);
-        reply.code(result?.code).send({ message: result?.message });
-    });
-    fastify.post("/delete-sub-tags", async (request, reply) => {
-        const result = await (0, functions_1.deleteSubTags)(fastify, request.body);
-        reply.code(result?.code).send({ message: result?.message });
-    });
-    fastify.post("/remove-tag-products", async (request, reply) => {
-        const result = await (0, functions_1.removeProductsFromTag)(fastify, request.body);
-        reply.code(result?.code).send({ message: result?.message });
-    });
-}
+// import { FastifyInstance } from "fastify";
+// import { addSubTags, createTag, deleteSubTags, deleteTag, getAllTags, getTagDetailsById, areProductsExistedUnderTag, removeProductsFromTag, updateTag, getAllTagsNoLevel, getMainTagsWithoutSub } from "../functions";
+// export async function tagsRoute(fastify: FastifyInstance) {
+//     fastify.get("/all-tags", async (request, reply) => {
+//         return await getAllTags(fastify);
+//     });
+//     fastify.get("/all-tags-no-level", async (request, reply) => {
+//         return await getAllTagsNoLevel(fastify);
+//     });
+//     fastify.get("/main-tags-no-sub", async (request, reply) => {
+//             return await getMainTagsWithoutSub(fastify);
+//         });
+//     fastify.get("/tag-details/:id", async (request, reply) => {
+//         const { id }: any = request.params;
+//         return await getTagDetailsById(fastify, id);
+//     });
+//     fastify.post("/add-tag", async (request, reply) => {
+//         const result = await createTag(fastify, request.body);
+//         reply.code(result?.code!).send({ message: result?.message });
+//     });
+//     fastify.post("/add-sub-tags", async (request, reply) => {
+//         const result = await addSubTags(fastify, request.body);
+//         reply.code(result?.code!).send({ message: result?.message });
+//     });
+//     fastify.post("/update-tag", async (request, reply) => {
+//         const result = await updateTag(fastify, request.body);
+//         reply.code(result?.code!).send({ message: result?.message });
+//     });
+//     fastify.get("/isTagDeletable/:id", async (request, reply) => {
+//         const { id }: any = request.params;
+//         return !(await areProductsExistedUnderTag(fastify, id));
+//     });
+//     fastify.post("/delete-tag/:id", async (request, reply) => {
+//         const { id }: any = request.params;
+//         const result = await deleteTag(fastify, id);
+//         reply.code(result?.code!).send({ message: result?.message });
+//     });
+//     fastify.post("/delete-sub-tags", async (request, reply) => {
+//         const result = await deleteSubTags(fastify, request.body);
+//         reply.code(result?.code!).send({ message: result?.message });
+//     });
+//     fastify.post("/remove-tag-products", async (request, reply) => {
+//         const result = await removeProductsFromTag(fastify, request.body);
+//         reply.code(result?.code!).send({ message: result?.message });
+//     });
+// }
 //# sourceMappingURL=tags.route.js.map
