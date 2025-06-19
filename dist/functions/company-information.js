@@ -1,23 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.modifyOurStoryImage = exports.updateCompanyInfoByKey = exports.getCompanyInfoByKey = exports.getAllCompanyInfo = void 0;
+exports.modifyImg = exports.updateCompanyInfoByName = exports.getCompanyInfoByName = exports.getAllCompanyInfo = void 0;
 const helpers_1 = require("../helpers");
 /**
  *
  * @param fastify
  * @returns {
  *  id: number
- *  key: string
+ *  name: string
  *  value: string
  *  createdAt: Date
  *  updatedAt: Date
+ *  isActive: Boolean
+ *  isDeleted: Boolean
  * }
  */
 const getAllCompanyInfo = async (fastify) => {
-    const connection = await fastify['mysql'].getConnection();
+    const connection = await fastify["mysql"].getConnection();
     let value;
     try {
-        const [rows] = await connection.query('SELECT * FROM companyInformation');
+        const [rows] = await connection.query("SELECT * FROM companyInformation");
         value = rows;
     }
     finally {
@@ -29,20 +31,22 @@ exports.getAllCompanyInfo = getAllCompanyInfo;
 /**
  *
  * @param fastify
- * @param key
+ * @param name
  * @returns {
  *  id: number
- *  key: string
+ *  name: string
  *  value: string
  *  createdAt: Date
  *  updatedAt: Date
+ *  isActive: Boolean
+ *  isDeleted: Boolean
  * }
  */
-const getCompanyInfoByKey = async (fastify, key) => {
-    const connection = await fastify['mysql'].getConnection();
+const getCompanyInfoByName = async (fastify, name) => {
+    const connection = await fastify["mysql"].getConnection();
     let value;
     try {
-        const [rows] = await connection.query('SELECT * FROM companyInformation WHERE `key`=?', [key]);
+        const [rows] = await connection.query("SELECT * FROM companyInformation WHERE `name`=?", [name]);
         value = rows[0];
     }
     finally {
@@ -50,7 +54,7 @@ const getCompanyInfoByKey = async (fastify, key) => {
         return value;
     }
 };
-exports.getCompanyInfoByKey = getCompanyInfoByKey;
+exports.getCompanyInfoByName = getCompanyInfoByName;
 /**
  *
  * @param fastify
@@ -63,24 +67,27 @@ exports.getCompanyInfoByKey = getCompanyInfoByKey;
  *  message: string,
  * }
  */
-const updateCompanyInfoByKey = async (fastify, data) => {
-    const connection = await fastify['mysql'].getConnection();
+const updateCompanyInfoByName = async (fastify, data) => {
+    const connection = await fastify["mysql"].getConnection();
     let res = { code: 200, message: "OK." };
     try {
-        const [result] = await connection.execute('UPDATE companyInformation SET value=? WHERE `key`=?', [data.value, data.key]);
-        res = result?.affectedRows > 0 ? {
-            code: 204,
-            message: `Company info updated.`
-        } : {
-            code: 500,
-            message: "Internal Server Error."
-        };
+        const [result] = await connection.execute("UPDATE companyInformation SET value=? WHERE `name`=?", [data.value, data.name]);
+        res =
+            result?.affectedRows > 0
+                ? {
+                    code: 204,
+                    message: `Company info - ${data.name} updated.`,
+                }
+                : {
+                    code: 500,
+                    message: "Internal Server Error.",
+                };
     }
     catch (err) {
         console.error(err);
         res = {
             code: 500,
-            message: "Internal Server Error."
+            message: "Internal Server Error.",
         };
     }
     finally {
@@ -88,48 +95,51 @@ const updateCompanyInfoByKey = async (fastify, data) => {
         return res;
     }
 };
-exports.updateCompanyInfoByKey = updateCompanyInfoByKey;
+exports.updateCompanyInfoByName = updateCompanyInfoByName;
 /**
  *
  * @param fastify
- * @param key
+ * @param name
  * @param image (AsyncIterableIterator<fastifyMultipart.MultipartFile>)
  * @returns {
  *  code: number,
  *  message: string,
  * }
  */
-const modifyOurStoryImage = async (fastify, key, image) => {
-    const connection = await fastify['mysql'].getConnection();
+const modifyImg = async (fastify, name, image) => {
+    const connection = await fastify["mysql"].getConnection();
     let res = { code: 200, message: "OK." };
     try {
-        const [rows] = await connection.query('SELECT * FROM companyInformation WHERE key=?', [key || "OUR_STORY_IMG"]);
+        const [rows] = await connection.query("SELECT * FROM companyInformation WHERE name=?", [name]);
         if (!rows || rows.length === 0) {
             res = {
                 code: 400,
-                message: 'Our Story image not found.'
+                message: `Information not found.`,
             };
             return;
         }
         if (rows[0].value) {
-            const oldFile = rows[0].value.split('/');
-            (0, helpers_1.removeImageFile)('home/our-story', oldFile[oldFile.length - 1]);
+            const oldFile = rows[0].value.split("/");
+            (0, helpers_1.removeImageFile)(`home/${name}`, oldFile[oldFile.length - 1]);
         }
-        (0, helpers_1.uploadImageFile)('home/our-story', image);
-        const [result] = await connection.execute('UPDATE companyInformation SET value=? WHERE key=?', [(0, helpers_1.formatImageUrl)('home/our-story', image.filename), key || "OUR_STORY_IMG"]);
-        res = result?.affectedRows > 0 ? {
-            code: 201,
-            message: `Our Story image uploaded.`
-        } : {
-            code: 500,
-            message: "Internal Server Error."
-        };
+        (0, helpers_1.uploadImageFile)(`home/${name}`, image);
+        const [result] = await connection.execute("UPDATE companyInformation SET value=? WHERE name=?", [(0, helpers_1.formatImageUrl)(`home/${name}`, image.filename), name]);
+        res =
+            result?.affectedRows > 0
+                ? {
+                    code: 201,
+                    message: `${name} - image uploaded.`,
+                }
+                : {
+                    code: 500,
+                    message: "Internal Server Error.",
+                };
     }
     catch (err) {
         console.error(err);
         res = {
             code: 500,
-            message: "Internal Server Error."
+            message: "Internal Server Error.",
         };
     }
     finally {
@@ -137,5 +147,5 @@ const modifyOurStoryImage = async (fastify, key, image) => {
         return res;
     }
 };
-exports.modifyOurStoryImage = modifyOurStoryImage;
+exports.modifyImg = modifyImg;
 //# sourceMappingURL=company-information.js.map
