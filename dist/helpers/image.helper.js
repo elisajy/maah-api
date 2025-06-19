@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.formatImageUrl = exports.removeImageFile = exports.uploadImageFile = exports.imagesFolder = void 0;
 const promises_1 = require("node:stream/promises");
 const node_fs_1 = __importDefault(require("node:fs"));
-exports.imagesFolder = '/home/lorenzac/public_html/images';
+exports.imagesFolder = '/home/maahstud/public_html/images';
 const uploadImageFile = (folder, image, filename) => {
     (0, promises_1.pipeline)(image.file, node_fs_1.default.createWriteStream(`${exports.imagesFolder}/${folder}/${filename ?? image.filename}`, { highWaterMark: 10 * 1024 * 1024 }));
 };
@@ -19,7 +19,7 @@ const removeImageFile = (folder, filename) => {
 };
 exports.removeImageFile = removeImageFile;
 const formatImageUrl = (folder, filename) => {
-    return encodeURI(`https://lorenzaceramica.com/images/${folder}/${filename}`);
+    return encodeURI(`https://maahstud.com/images/${folder}/${filename}`);
 };
 exports.formatImageUrl = formatImageUrl;
 //# sourceMappingURL=image.helper.js.map

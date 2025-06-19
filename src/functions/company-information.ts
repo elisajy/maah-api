@@ -30,7 +30,7 @@ export const getAllCompanyInfo = async (fastify: FastifyInstance) => {
 /**
  *
  * @param fastify
- * @param key
+ * @param name
  * @returns {
  *  id: number
  *  name: string
@@ -41,17 +41,17 @@ export const getAllCompanyInfo = async (fastify: FastifyInstance) => {
  *  isDeleted: Boolean
  * }
  */
-export const getCompanyInfoByKey = async (
+export const getCompanyInfoByName = async (
   fastify: FastifyInstance,
-  key: string
+  name: string
 ) => {
   const connection = await fastify["mysql"].getConnection();
   let value: any;
 
   try {
     const [rows] = await connection.query(
-      "SELECT * FROM companyInformation WHERE `key`=?",
-      [key]
+      "SELECT * FROM companyInformation WHERE `name`=?",
+      [name]
     );
     value = rows[0];
   } finally {
@@ -72,7 +72,7 @@ export const getCompanyInfoByKey = async (
  *  message: string,
  * }
  */
-export const updateCompanyInfoByKey = async (
+export const updateCompanyInfoByName = async (
   fastify: FastifyInstance,
   data: any
 ) => {
@@ -81,19 +81,19 @@ export const updateCompanyInfoByKey = async (
 
   try {
     const [result] = await connection.execute(
-      "UPDATE companyInformation SET value=? WHERE `key`=?",
-      [data.value, data.key]
+      "UPDATE companyInformation SET value=? WHERE `name`=?",
+      [data.value, data.name]
     );
     res =
       result?.affectedRows > 0
         ? {
-            code: 204,
-            message: `Company info - ${data.key} updated.`,
-          }
+          code: 204,
+          message: `Company info - ${data.name} updated.`,
+        }
         : {
-            code: 500,
-            message: "Internal Server Error.",
-          };
+          code: 500,
+          message: "Internal Server Error.",
+        };
   } catch (err) {
     console.error(err);
     res = {
@@ -109,7 +109,7 @@ export const updateCompanyInfoByKey = async (
 /**
  *
  * @param fastify
- * @param key
+ * @param name
  * @param image (AsyncIterableIterator<fastifyMultipart.MultipartFile>)
  * @returns {
  *  code: number,
@@ -118,48 +118,47 @@ export const updateCompanyInfoByKey = async (
  */
 export const modifyImg = async (
   fastify: FastifyInstance,
-  key: string,
+  name: string,
   image: any
 ) => {
   const connection = await fastify["mysql"].getConnection();
   let res: { code: number; message: string } = { code: 200, message: "OK." };
 
   try {
-    // const [rows] = await connection.query('SELECT * FROM companyInformation WHERE key=?', [key || "OUR_STORY_IMG"]);
     const [rows] = await connection.query(
-      "SELECT * FROM companyInformation WHERE key=?",
-      [key]
+      "SELECT * FROM companyInformation WHERE name=?",
+      [name]
     );
 
     if (!rows || rows.length === 0) {
       res = {
         code: 400,
-        message: `${key} - image not found.`,
+        message: `Information not found.`,
       };
       return;
     }
 
     if (rows[0].value) {
       const oldFile = rows[0].value.split("/");
-      removeImageFile(`home/${key}`, oldFile[oldFile.length - 1]);
+      removeImageFile(`home/${name}`, oldFile[oldFile.length - 1]);
     }
 
-    uploadImageFile(`home/${key}`, image);
+    uploadImageFile(`home/${name}`, image);
 
     const [result] = await connection.execute(
-      "UPDATE companyInformation SET value=? WHERE key=?",
-      [formatImageUrl(`home/${key}`, image.filename), key]
+      "UPDATE companyInformation SET value=? WHERE name=?",
+      [formatImageUrl(`home/${name}`, image.filename), name]
     );
     res =
       result?.affectedRows > 0
         ? {
-            code: 201,
-            message: `${key} - image uploaded.`,
-          }
+          code: 201,
+          message: `${name} - image uploaded.`,
+        }
         : {
-            code: 500,
-            message: "Internal Server Error.",
-          };
+          code: 500,
+          message: "Internal Server Error.",
+        };
   } catch (err) {
     console.error(err);
     res = {

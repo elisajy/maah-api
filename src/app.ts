@@ -1,6 +1,6 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
-import { aboutUsRoute, authRoute, categoriesRoute, colorsRoute, companyInfoRoute, faqRoute, finishesRoute, homeBannersRoute, homePartnersRoute, inspirationsRoute, productsImagesRoute, productsRoute, productsSideNavsRoute, projectCommercialsRoute, projectResidentialsRoute, sizesRoute, tagsRoute } from './routes';
+import { authRoute, categoriesRoute, colorsRoute, companyInfoRoute, faqRoute, productsImagesRoute, productsRoute, setsRoute, sizesRoute } from './routes';
 import dotenv from 'dotenv';
 import fastifyMysql from '@fastify/mysql';
 import fastifyMultipart from '@fastify/multipart';
@@ -35,22 +35,14 @@ server.register(fastifyJwt, {
 
 // routes
 server.register(authRoute);
-server.register(aboutUsRoute);
+server.register(setsRoute);
 server.register(companyInfoRoute);
 server.register(categoriesRoute);
 server.register(colorsRoute);
 server.register(faqRoute);
-server.register(finishesRoute);
-server.register(homeBannersRoute);
-server.register(homePartnersRoute);
-server.register(inspirationsRoute);
 server.register(productsRoute);
 server.register(productsImagesRoute);
-server.register(productsSideNavsRoute);
-server.register(projectCommercialsRoute);
-server.register(projectResidentialsRoute);
 server.register(sizesRoute);
-server.register(tagsRoute);
 
 server.decorate("authenticate", async function (request, reply) {
     try {
@@ -59,6 +51,10 @@ server.decorate("authenticate", async function (request, reply) {
         reply.send(err)
     }
 })
+
+server.get('/', async (request, reply) => {
+    return { message: 'API is running!' };
+});
 
 server.listen({ host: '127.0.0.1', port: 8080 }, (err, address) => {
     if (err) {
