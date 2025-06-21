@@ -7,12 +7,9 @@ async function productsRoute(fastify) {
         const result = await (0, functions_1.addProduct)(fastify, request.body);
         reply.code(result?.code).send({ message: result?.message, id: result?.id });
     });
-    fastify.get("/all-products", async (request, reply) => {
-        return await (0, functions_1.getProducts)(fastify);
-    });
-    fastify.get("/product-details/:id", async (request, reply) => {
-        const { id } = request.params;
-        return await (0, functions_1.getProductDetailsById)(fastify, id);
+    fastify.post("/set-sold-out-status", async (request, reply) => {
+        const result = await (0, functions_1.setSoldOutStatus)(fastify, request.body);
+        reply.code(result?.code).send({ message: result?.message });
     });
     fastify.post("/update-product", async (request, reply) => {
         const result = await (0, functions_1.updateProduct)(fastify, request.body);
@@ -23,24 +20,37 @@ async function productsRoute(fastify) {
         const result = await (0, functions_1.removeProduct)(fastify, id);
         reply.code(result?.code).send({ message: result?.message });
     });
-    fastify.post("/delete-products", async (request, reply) => {
-        const result = await (0, functions_1.removeProducts)(fastify, request.body);
-        reply.code(result?.code).send({ message: result?.message });
-    });
     fastify.post("/assign-product-categories", async (request, reply) => {
         const result = await (0, functions_1.assignProductToCategories)(fastify, request.body);
         reply.code(result?.code).send({ message: result?.message });
     });
-    fastify.post("/assign-product-tags", async (request, reply) => {
-        const result = await (0, functions_1.assignProductToTags)(fastify, request.body);
+    fastify.post("/assign-product-colors", async (request, reply) => {
+        const result = await (0, functions_1.assignProductToColors)(fastify, request.body);
+        reply.code(result?.code).send({ message: result?.message });
+    });
+    fastify.post("/assign-product-sizes", async (request, reply) => {
+        const result = await (0, functions_1.assignProductToSizes)(fastify, request.body);
         reply.code(result?.code).send({ message: result?.message });
     });
     fastify.post("/remove-product-categories", async (request, reply) => {
         const result = await (0, functions_1.removeCategoriesForProduct)(fastify, request.body);
         reply.code(result?.code).send({ message: result?.message });
     });
-    fastify.post("/remove-product-tags", async (request, reply) => {
-        const result = await (0, functions_1.removeTagsForProduct)(fastify, request.body);
+    fastify.post("/remove-product-sizes", async (request, reply) => {
+        const result = await (0, functions_1.removeSizesForProduct)(fastify, request.body);
+        reply.code(result?.code).send({ message: result?.message });
+    });
+    fastify.post("/remove-product-colors", async (request, reply) => {
+        const result = await (0, functions_1.removeColorsForProduct)(fastify, request.body);
+        reply.code(result?.code).send({ message: result?.message });
+    });
+    fastify.post("/update-on-sales", async (request, reply) => {
+        const { id, status } = request.body;
+        const result = await (0, functions_1.updateOnSalesStatus)(fastify, id, status);
+        reply.code(result?.code).send({ message: result?.message });
+    });
+    fastify.post("/update-discount-price", async (request, reply) => {
+        const result = await (0, functions_1.updateDiscountPrice)(fastify, request.body);
         reply.code(result?.code).send({ message: result?.message });
     });
 }

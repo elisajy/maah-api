@@ -29,28 +29,20 @@ server.register(cors_1.default, {
 server.register(multipart_1.default, { throwFileSizeLimit: false });
 server.register(jwt_1.default, {
     secret: {
-        private: fs_1.default.readFileSync(path_1.default.join(__dirname, './keys/access_private.key'), 'utf8'),
-        public: fs_1.default.readFileSync(path_1.default.join(__dirname, './keys/access_public.key'), 'utf8'),
+        private: fs_1.default.readFileSync(path_1.default.join(__dirname, '../keys/access_private.key'), 'utf8'),
+        public: fs_1.default.readFileSync(path_1.default.join(__dirname, '../keys/access_public.key'), 'utf8'),
     }
 });
 // routes
 server.register(routes_1.authRoute);
-server.register(routes_1.aboutUsRoute);
+server.register(routes_1.setsRoute);
 server.register(routes_1.companyInfoRoute);
 server.register(routes_1.categoriesRoute);
 server.register(routes_1.colorsRoute);
 server.register(routes_1.faqRoute);
-server.register(routes_1.finishesRoute);
-server.register(routes_1.homeBannersRoute);
-server.register(routes_1.homePartnersRoute);
-server.register(routes_1.inspirationsRoute);
 server.register(routes_1.productsRoute);
 server.register(routes_1.productsImagesRoute);
-server.register(routes_1.productsSideNavsRoute);
-server.register(routes_1.projectCommercialsRoute);
-server.register(routes_1.projectResidentialsRoute);
 server.register(routes_1.sizesRoute);
-server.register(routes_1.tagsRoute);
 server.decorate("authenticate", async function (request, reply) {
     try {
         await request.jwtVerify();
@@ -58,6 +50,9 @@ server.decorate("authenticate", async function (request, reply) {
     catch (err) {
         reply.send(err);
     }
+});
+server.get('/', async (request, reply) => {
+    return { message: 'API is running!' };
 });
 server.listen({ host: '127.0.0.1', port: 8080 }, (err, address) => {
     if (err) {

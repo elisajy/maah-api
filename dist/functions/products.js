@@ -1,24 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.formatImageUrl = exports.getProductDetailsById = exports.getProducts = exports.removeProducts = exports.removeProduct = exports.updateProduct = exports.removeTagsForProduct = exports.removeCategoriesForProduct = exports.assignProductToTags = exports.assignProductToCategories = exports.addProduct = void 0;
-const products_images_1 = require("./products-images");
+exports.updateDiscountPrice = exports.updateOnSalesStatus = exports.removeProduct = exports.updateProduct = exports.removeColorsForProduct = exports.removeSizesForProduct = exports.removeCategoriesForProduct = exports.assignProductToSizes = exports.assignProductToColors = exports.assignProductToCategories = exports.setSoldOutStatus = exports.addProduct = void 0;
 const helpers_1 = require("../helpers");
 /**
  *
  * @param fastify
  * @param data {
  *  name: string
- *  code?: string
- *  description?: string
- *  variation?: string
- *  color?: string
- *  colorId?: number
- *  size?: number
- *  finish?: number
- *  thickness?: string
- *  tags: number[]
- *  categories: number[]
- *  sequence?: number
+ *  code: string
+ *  description: string
+ *  price: number
+ *  remarks: string
+ *  sequence: number
+ *
  * }
  * @returns {
  *  code: number,
@@ -28,54 +22,35 @@ const helpers_1 = require("../helpers");
 const addProduct = async (fastify, data) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
-    let sizeStr = null;
-    let finishStr = null;
+    // let sizeStr = null;
+    // let finishStr = null;
     try {
-        let checkSql = `SELECT p.id FROM products p WHERE p.name = \'${data.name}\' AND (p.code = \'${data.code}\' OR p.color = \'${data.color}\');`;
+        let checkSql = `SELECT id FROM products WHERE name = \'${data.name}\' AND code = \'${data.code}\';`;
         const [rows] = await connection.query(checkSql);
         if (rows && rows.length > 0) {
             if (rows[0].id) {
                 res = {
                     code: 409,
-                    message: 'Product with the same name and code or color existed.'
+                    message: 'Product with the same name and code existed.'
                 };
                 return;
             }
         }
-        if (data.size) {
-            const [sizes] = await connection.query('SELECT name, value FROM sizes WHERE id=?', [data.size]);
-            sizeStr = sizes[0].value;
-        }
-        if (data.finish) {
-            const [finishes] = await connection.query('SELECT name, value FROM finishes WHERE id=?', [data.finish]);
-            finishStr = finishes[0].name;
-        }
-        let sql = "INSERT INTO products (name,code,description,variation,color,size,finish,thickness,sequence) VALUES ";
-        sql += `('${data.name}','${data.code}','${data.description}','${data.variation}','${data.color}','${sizeStr}','${finishStr}','${data.thickness}',${data.sequence || null});`;
-        sql = sql.replaceAll("'null'", "null");
-        sql = sql.replaceAll("'undefined'", "null");
+        let sql = "INSERT INTO products (name,code,productDescription,sequence,remarks,price) VALUES ";
+        sql += `('${data.name}','${data.code}','${data.description}','${data.sequence}','${data.remarks}',${data.price});`;
         // result
         // {
         //      fieldCount, affectedRows, insertId, info, serverStatus, warningStatus, changesRows
         // }
         const [result] = await connection.execute(sql);
-        if (data.colorId) {
-            await connection.execute("INSERT INTO productsColors (productId,colorId) VALUES (?,?)", [result.insertId, data.colorId]);
-        }
-        if (data.size) {
-            await connection.execute('INSERT INTO productsSizes (productId,sizeId) VALUES (?,?)', [result.insertId, data.size]);
-        }
-        if (data.finish) {
-            await connection.execute('INSERT INTO productsFinishes (productId,finishId) VALUES (?,?)', [result.insertId, data.finish]);
-        }
-        // Assign categories
-        if (data.categories && data.categories.length > 0) {
-            await (0, exports.assignProductToCategories)(fastify, { productId: result.insertId, categories: data.categories });
-        }
-        // Assign tags
-        if (data.tags && data.tags.length > 0) {
-            await (0, exports.assignProductToTags)(fastify, { productId: result.insertId, tags: data.tags });
-        }
+        // // Assign categories
+        // if (data.categories && data.categories.length > 0) {
+        //     await assignProductToCategories(fastify, { productId: result.insertId, categories: data.categories });
+        // }
+        // // Assign colors
+        // if (data.tags && data.tags.length > 0) {
+        //     await assignProductToTags(fastify, { productId: result.insertId, tags: data.tags });
+        // }
         res = result?.insertId ? {
             code: 201,
             message: `Product created. Created product Id: ${result.insertId}`,
@@ -103,6 +78,40 @@ exports.addProduct = addProduct;
  * @param fastify
  * @param data {
  *  productId: number
+ *  isSoldOut: boolean
+ * }
+ * @returns {
+ *  code: number,
+ *  message: string,
+ * }
+*/
+const setSoldOutStatus = async (fastify, data) => {
+    const connection = await fastify['mysql'].getConnection();
+    let res = { code: 200, message: "OK." };
+    try {
+        const [result] = await connection.execute('UPDATE products SET soldOut = ? WHERE id = ?', [data.soldOut ? 1 : 0, data.productId]);
+        res = result.affectedRows > 0
+            ? { code: 204, message: "Product sold out status updated." }
+            : { code: 404, message: "Product not found." };
+    }
+    catch (err) {
+        console.error(err);
+        res = {
+            code: 500,
+            message: "Internal Server Error."
+        };
+    }
+    finally {
+        connection.release();
+        return res;
+    }
+};
+exports.setSoldOutStatus = setSoldOutStatus;
+/**
+ *
+ * @param fastify
+ * @param data {
+ *  productId: number
  *  categories: number[]
  * }
  * @returns {
@@ -114,23 +123,24 @@ const assignProductToCategories = async (fastify, data) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
     try {
-        let args = '';
-        const [rows] = await connection.query('SELECT categoryId FROM productsCategories WHERE productId=?', [data.productId]);
-        const categories = data.categories.filter((id) => !rows.find((x) => x.categoryId === id));
-        for (const id of categories) {
-            args = args.concat(`${id},`);
-        }
-        if (args.length > 0) {
-            args = args.substring(0, args.length - 1);
-            let sql = "INSERT INTO productsCategories (productId,categoryId) ";
-            sql += `SELECT ${data.productId}, c.id FROM categories c WHERE c.id IN (${args});`;
-            const [result] = await connection.execute(sql);
-            res = result?.insertId ? {
+        const [existingRows] = await connection.query('SELECT categoryId FROM productsCategories WHERE productId = ?', [data.productId]);
+        const existingCategoryIds = existingRows.map((row) => row.categoryId);
+        const newCategories = data.categories.filter((id) => !existingCategoryIds.includes(id));
+        if (newCategories.length > 0) {
+            const values = newCategories.map((categoryId) => [data.productId, categoryId]);
+            const [result] = await connection.query('INSERT INTO productsCategories (productId, categoryId) VALUES ?', [values]);
+            res = result?.affectedRows > 0 ? {
                 code: 201,
-                message: "Product Categories assigned."
+                message: "Product categories assigned."
             } : {
                 code: 500,
                 message: "Internal Server Error."
+            };
+        }
+        else {
+            res = {
+                code: 200,
+                message: "No new categories to assign."
             };
         }
     }
@@ -152,50 +162,81 @@ exports.assignProductToCategories = assignProductToCategories;
  * @param fastify
  * @param data {
  *  productId: number
- *  tags: number[]
+ *  colors: number[]
  * }
  * @returns {
  *  code: number,
  *  message: string,
  * }
-*/
-const assignProductToTags = async (fastify, data) => {
+ */
+const assignProductToColors = async (fastify, data) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
     try {
-        let args = '';
-        const [rows] = await connection.query('SELECT tagId FROM productsTags WHERE productId=?', [data.productId]);
-        const tags = data.tags.filter((id) => !rows.find((x) => x.tagId === id));
-        for (const id of tags) {
-            args = args.concat(`${id},`);
+        const [existing] = await connection.query('SELECT colorId FROM productColors WHERE productId = ?', [data.productId]);
+        const existingIds = existing.map((row) => row.colorId);
+        const newColors = data.colors.filter((id) => !existingIds.includes(id));
+        if (newColors.length === 0) {
+            res = { code: 200, message: "No new colors to assign." };
         }
-        if (args.length > 0) {
-            args = args.substring(0, args.length - 1);
-            let sql = "INSERT INTO productsTags (productId,tagId) ";
-            sql += `SELECT ${data.productId}, t.id FROM tags t WHERE t.id IN (${args});`;
-            const [result] = await connection.execute(sql);
-            res = result?.insertId ? {
-                code: 201,
-                message: "Product Tags assigned."
-            } : {
-                code: 500,
-                message: "Internal Server Error."
-            };
+        else {
+            const values = newColors.map((colorId) => [data.productId, colorId]);
+            const [result] = await connection.query('INSERT INTO productColors (productId, colorId) VALUES ?', [values]);
+            res = result?.affectedRows > 0
+                ? { code: 201, message: "Product Colors assigned." }
+                : { code: 500, message: "Internal Server Error." };
         }
     }
     catch (err) {
         console.error(err);
-        res = {
-            code: 500,
-            message: "Internal Server Error."
-        };
+        res = { code: 500, message: "Internal Server Error." };
     }
     finally {
         connection.release();
         return res;
     }
 };
-exports.assignProductToTags = assignProductToTags;
+exports.assignProductToColors = assignProductToColors;
+/**
+ *
+ * @param fastify
+ * @param data {
+ *  productId: number
+ *  sizes: number[]
+ * }
+ * @returns {
+ *  code: number,
+ *  message: string,
+ * }
+ */
+const assignProductToSizes = async (fastify, data) => {
+    const connection = await fastify['mysql'].getConnection();
+    let res = { code: 200, message: "OK." };
+    try {
+        const [existing] = await connection.query('SELECT sizeId FROM productsSizes WHERE productId = ?', [data.productId]);
+        const existingIds = existing.map((row) => row.sizeId);
+        const newSizes = data.sizes.filter((id) => !existingIds.includes(id));
+        if (newSizes.length === 0) {
+            res = { code: 200, message: "No new sizes to assign." };
+        }
+        else {
+            const values = newSizes.map((sizeId) => [data.productId, sizeId]);
+            const [result] = await connection.query('INSERT INTO productsSizes (productId, sizeId) VALUES ?', [values]);
+            res = result?.affectedRows > 0
+                ? { code: 201, message: "Product Sizes assigned." }
+                : { code: 500, message: "Internal Server Error." };
+        }
+    }
+    catch (err) {
+        console.error(err);
+        res = { code: 500, message: "Internal Server Error." };
+    }
+    finally {
+        connection.release();
+        return res;
+    }
+};
+exports.assignProductToSizes = assignProductToSizes;
 /**
  *
  * @param fastify
@@ -212,30 +253,27 @@ const removeCategoriesForProduct = async (fastify, data) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
     try {
-        let args = '';
-        for (const id of data.categories) {
-            args = args.concat(`${id},`);
+        if (data.categories.length === 0) {
+            res = { code: 400, message: "No categories provided." };
+            return res;
         }
-        if (args.length > 0) {
-            args = args.substring(0, args.length - 1);
-            let sql = "DELETE FROM productsCategories ";
-            sql += `WHERE productId = ${data.productId} AND categoryId IN (${args});`;
-            const [result] = await connection.execute(sql);
-            res = result?.affectedRows > 0 ? {
-                code: 204,
-                message: "Product Categories removed."
-            } : {
-                code: 500,
-                message: "Internal Server Error."
-            };
-        }
+        const args = data.categories.join(',');
+        const sql = `
+            DELETE FROM productsCategories
+            WHERE productId = ? AND categoryId IN (${args})
+        `;
+        const [result] = await connection.execute(sql, [data.productId]);
+        res = result?.affectedRows > 0 ? {
+            code: 204,
+            message: "Selected categories removed from product."
+        } : {
+            code: 500,
+            message: "No categories were removed."
+        };
     }
     catch (err) {
         console.error(err);
-        res = {
-            code: 500,
-            message: "Internal Server Error."
-        };
+        res = { code: 500, message: "Internal Server Error." };
     }
     finally {
         connection.release();
@@ -248,34 +286,35 @@ exports.removeCategoriesForProduct = removeCategoriesForProduct;
  * @param fastify
  * @param data {
  *  productId: number
- *  tags: number[]
+ *  sizes: number[]
  * }
  * @returns {
  *  code: number,
  *  message: string,
  * }
-*/
-const removeTagsForProduct = async (fastify, data) => {
+ */
+const removeSizesForProduct = async (fastify, data) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
     try {
-        let args = '';
-        for (const id of data.tags) {
-            args = args.concat(`${id},`);
+        if (!data.sizes || data.sizes.length === 0) {
+            res = { code: 400, message: "No sizes provided." };
+            return res;
         }
-        if (args.length > 0) {
-            args = args.substring(0, args.length - 1);
-            let sql = "DELETE FROM productsTags ";
-            sql += `WHERE productId = ${data.productId} AND tagId IN (${args});`;
-            const [result] = await connection.execute(sql);
-            res = result?.affectedRows > 0 ? {
-                code: 204,
-                message: "Product Tags removed."
-            } : {
-                code: 500,
-                message: "Internal Server Error."
-            };
-        }
+        const args = data.sizes.map(() => '?').join(',');
+        const sql = `
+            DELETE FROM productsSizes
+            WHERE productId = ? AND sizeId IN (${args})
+        `;
+        const params = [data.productId, ...data.sizes];
+        const [result] = await connection.execute(sql, params);
+        res = result?.affectedRows > 0 ? {
+            code: 204,
+            message: "Product sizes removed."
+        } : {
+            code: 500,
+            message: "No sizes were removed."
+        };
     }
     catch (err) {
         console.error(err);
@@ -289,172 +328,40 @@ const removeTagsForProduct = async (fastify, data) => {
         return res;
     }
 };
-exports.removeTagsForProduct = removeTagsForProduct;
+exports.removeSizesForProduct = removeSizesForProduct;
 /**
  *
  * @param fastify
  * @param data {
- *  id: number
- *  name: string
- *  code?: string
- *  description?: string
- *  variation?: string
- *  color?: string
- *  colorId?: number
- *  size?: number
- *  finish?: number
- *  thickness?: string
- *  tags: number[]
- *  categories: number[]
- *  sequence?: number
- *  notDeletedImageUrls?: string[]
+ *  productId: number
+ *  colors: number[]
  * }
  * @returns {
  *  code: number,
  *  message: string,
  * }
-*/
-const updateProduct = async (fastify, data) => {
+ */
+const removeColorsForProduct = async (fastify, data) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
-    let sizeStr = null;
-    let finishStr = null;
     try {
-        const [rows] = await connection.query('SELECT p.id, p.code, p.color, s.id AS size, f.id AS finish FROM products p LEFT JOIN sizes s ON s.value = p.size LEFT JOIN finishes f ON f.name = p.finish WHERE p.id=?', [data.id]);
-        if (rows && rows.length > 0) {
-            if (rows[0].id) {
-                // If code is NULL, color is used as productCode in productsImages
-                // Thus color is not changeable
-                if (data.color && data.color !== rows[0].color) {
-                    if (!rows[0].code) {
-                        res = {
-                            code: 400,
-                            message: "Color is not changeable."
-                        };
-                        return;
-                    }
-                    await connection.execute("UPDATE products SET color=? WHERE id=?", [data.color || null, data.id]);
-                }
-                const [colors] = await connection.query("SELECT colorId FROM productsColors WHERE productId=?", [data.id]);
-                if (data.colorId) {
-                    if (colors && colors.length > 0) {
-                        if (data.colorId !== colors[0].colorId) {
-                            // Remove existing color
-                            await connection.execute('DELETE FROM productsColors WHERE productId=?', [rows[0].id]);
-                        }
-                    }
-                    else {
-                        // Insert new color
-                        await connection.execute('INSERT INTO productsColors (productId,colorId) VALUES (?,?)', [data.id, data.colorId]);
-                    }
-                }
-                else if (!data.colorId) {
-                    if (colors && colors.length > 0) {
-                        // Remove existing color
-                        await connection.execute('DELETE FROM productsColors WHERE productId=?', [rows[0].id]);
-                    }
-                }
-                if (data.size && data.size !== rows[0].size) {
-                    // Remove existing size
-                    await connection.execute('DELETE FROM productsSizes WHERE productId=? AND sizeId=?', [rows[0].id, rows[0].size]);
-                    // Insert new size
-                    await connection.execute('INSERT INTO productsSizes (productId,sizeId) VALUES (?,?)', [data.id, data.size]);
-                }
-                else if (!data.size && rows[0].size) {
-                    // Remove existing size
-                    await connection.execute('DELETE FROM productsSizes WHERE productId=? AND sizeId=?', [rows[0].id, rows[0].size]);
-                }
-                if (data.finish && data.finish !== rows[0].finish) {
-                    // Remove existing finish
-                    await connection.execute('DELETE FROM productsFinishes WHERE productId=? AND finishId=?', [rows[0].id, rows[0].finish]);
-                    // Insert new finish
-                    await connection.execute('INSERT INTO productsFinishes (productId,finishId) VALUES (?,?)', [data.id, data.finish]);
-                }
-                else if (!data.finish && rows[0].finish) {
-                    // Remove existing finish
-                    await connection.execute('DELETE FROM productsFinishes WHERE productId=? AND finishId=?', [rows[0].id, rows[0].finish]);
-                }
-                // Remove and assign categories
-                const [categories] = await connection.query('SELECT categoryId FROM productsCategories WHERE productId=?', [rows[0].id]);
-                let addCategories = [];
-                let deleteCategories = [];
-                if (data.categories && data.categories.length > 0) {
-                    if (categories && categories.length > 0) {
-                        addCategories = data.categories.filter((x) => !categories.find((y) => y.categoryId === x));
-                        const deletedAry = categories.filter((x) => !data.categories.find((y) => x.categoryId === y));
-                        deleteCategories = deletedAry.length > 0 ? deletedAry.map((x) => x.categoryId) : [];
-                    }
-                    else {
-                        addCategories = data.categories;
-                    }
-                }
-                else {
-                    if (categories && categories.length > 0) {
-                        deleteCategories = categories.map((x) => x.categoryId);
-                    }
-                }
-                if (addCategories.length > 0)
-                    await (0, exports.assignProductToCategories)(fastify, { productId: rows[0].id, categories: addCategories });
-                if (deleteCategories.length > 0)
-                    await (0, exports.removeCategoriesForProduct)(fastify, { productId: rows[0].id, categories: deleteCategories });
-                // Remove and assign tags
-                const [tags] = await connection.query('SELECT tagId FROM productsTags WHERE productId=?', [rows[0].id]);
-                let addTags = [];
-                let deleteTags = [];
-                if (data.tags && data.tags.length > 0) {
-                    if (tags && tags.length > 0) {
-                        addTags = data.tags.filter((x) => !tags.find((y) => y.tagId === x));
-                        const deletedAry = tags.filter((x) => !data.tags.find((y) => x.tagId === y));
-                        deleteTags = deletedAry.length > 0 ? deletedAry.map((x) => x.tagId) : [];
-                    }
-                    else {
-                        addTags = data.tags;
-                    }
-                }
-                else {
-                    if (tags && tags.length > 0) {
-                        deleteTags = tags.map((x) => x.tagId);
-                    }
-                }
-                if (addTags.length > 0)
-                    await (0, exports.assignProductToTags)(fastify, { productId: rows[0].id, tags: addTags });
-                if (deleteTags.length > 0)
-                    await (0, exports.removeTagsForProduct)(fastify, { productId: rows[0].id, tags: deleteTags });
-                // Handle product images deletion
-                const [images] = await connection.query('SELECT * FROM productsImages WHERE productId=?', [rows[0].id]);
-                if (images && images.length > 0) {
-                    let deletedImageUrls = [];
-                    if ((!data.notDeletedImageUrls || data.notDeletedImageUrls?.length === 0)) {
-                        deletedImageUrls = images.map((x) => (0, exports.formatImageUrl)(x.productName, x.productCode, x.sequence, x.type));
-                    }
-                    else {
-                        const temp = images.filter((x) => !data.notDeletedImageUrls.find((y) => y === (0, exports.formatImageUrl)(x.productName, x.productCode, x.sequence, x.type)));
-                        deletedImageUrls = temp.map((x) => (0, exports.formatImageUrl)(x.productName, x.productCode, x.sequence, x.type));
-                    }
-                    if (deletedImageUrls && deletedImageUrls.length > 0) {
-                        await (0, products_images_1.removeProductsImages)(fastify, {
-                            productId: rows[0].id,
-                            imageUrls: deletedImageUrls,
-                        });
-                    }
-                }
-            }
+        if (!data.colors || data.colors.length === 0) {
+            res = { code: 400, message: "No colors provided." };
+            return res;
         }
-        if (data.size) {
-            const [sizes] = await connection.query('SELECT name, value FROM sizes WHERE id=?', [data.size]);
-            sizeStr = sizes[0].value;
-        }
-        if (data.finish) {
-            const [finishes] = await connection.query('SELECT name, value FROM finishes WHERE id=?', [data.finish]);
-            finishStr = finishes[0].name;
-        }
-        const [result] = await connection.execute("UPDATE products SET description=?, variation=?, thickness=?, size=?, finish=?, sequence=? WHERE id=?", [data.description || null, data.variation || null, data.thickness || null, sizeStr, finishStr, data.sequence || null, data.id]);
+        const args = data.colors.map(() => '?').join(',');
+        const sql = `
+            DELETE FROM productColors
+            WHERE productId = ? AND colorId IN (${args})
+        `;
+        const params = [data.productId, ...data.colors];
+        const [result] = await connection.execute(sql, params);
         res = result?.affectedRows > 0 ? {
             code: 204,
-            message: `Product updated.`
+            message: "Product colors removed."
         } : {
             code: 500,
-            message: "Internal Server Error."
+            message: "No colors were removed."
         };
     }
     catch (err) {
@@ -463,6 +370,79 @@ const updateProduct = async (fastify, data) => {
             code: 500,
             message: "Internal Server Error."
         };
+    }
+    finally {
+        connection.release();
+        return res;
+    }
+};
+exports.removeColorsForProduct = removeColorsForProduct;
+/**
+ *
+ * @param fastify
+ * @param data {
+ *  id: number
+ *  name: string
+ *  code: string
+ *  description: string
+ *  isSoldOut: boolean
+ *  colors: number[]
+ *  price: number
+ *  remarks: string
+ *  sizes: number[]
+ *  categories: number[]
+ *  sequence: number
+ * }
+ * @returns {
+ *  code: number,
+ *  message: string,
+ * }
+*/
+const updateProduct = async (fastify, data) => {
+    // to update product's size, colors and categories at once
+    const connection = await fastify['mysql'].getConnection();
+    let res = { code: 200, message: "OK." };
+    try {
+        await connection.beginTransaction();
+        const [result] = await connection.execute(`
+            UPDATE products SET 
+                name=?, code=?, productDescription=?, price=?, remarks=?, isSoldOut=?, sequence=?
+            WHERE id=?
+        `, [
+            data.name || null,
+            data.code || null,
+            data.description || null,
+            data.price || null,
+            data.remarks || null,
+            data.isSoldOut || false,
+            data.sequence || null,
+            data.id
+        ]);
+        if (!result || result.affectedRows === 0) {
+            throw new Error('Product not found or update failed.');
+        }
+        await connection.execute(`DELETE FROM productsCategories WHERE productId=?`, [data.id]);
+        if (data.categories && data.categories.length > 0) {
+            const catValues = data.categories.map((cid) => [data.id, cid]);
+            await connection.query(`INSERT INTO productsCategories (productId, categoryId) VALUES ?`, [catValues]);
+        }
+        await connection.execute(`DELETE FROM productColors WHERE productId=?`, [data.id]);
+        if (data.colors && data.colors.length > 0) {
+            const colorValues = data.colors.map((colorId) => [data.id, colorId]);
+            await connection.query(`INSERT INTO productColors (productId, colorId) VALUES ?`, [colorValues]);
+        }
+        await connection.execute(`DELETE FROM productsSizes WHERE productId=?`, [data.id]);
+        if (data.sizes && data.sizes.length > 0) {
+            const sizeValues = data.sizes.map((sizeId) => [data.id, sizeId]);
+            await connection.query(`INSERT INTO productsSizes (productId, sizeId) VALUES ?`, [sizeValues]);
+        }
+        await connection.commit();
+        res = { code: 204, message: 'Product updated.' };
+    }
+    catch (err) {
+        await connection.rollback();
+        console.error(err);
+        res = { code: 500, message: 'Internal Server Error.' };
     }
     finally {
         connection.release();
@@ -478,7 +458,7 @@ exports.updateProduct = updateProduct;
  *  code: number,
  *  message: string,
  * }
-*/
+ */
 const removeProduct = async (fastify, id) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
@@ -488,11 +468,11 @@ const removeProduct = async (fastify, id) => {
             (0, helpers_1.removeImageFile)(`products/${i.productName}`, `${i.productCode}-${i.sequence}.${i.type}`);
         }
         await connection.execute('DELETE FROM productsCategories WHERE productId=?', [id]);
-        await connection.execute('DELETE FROM productsColors WHERE productId=?', [id]);
-        await connection.execute('DELETE FROM productsFinishes WHERE productId=?', [id]);
-        await connection.execute('DELETE FROM productsImages WHERE productId=?', [id]);
+        await connection.execute('DELETE FROM productColors WHERE productId=?', [id]);
         await connection.execute('DELETE FROM productsSizes WHERE productId=?', [id]);
-        await connection.execute('DELETE FROM productsTags WHERE productId=?', [id]);
+        await connection.execute('DELETE FROM setItems WHERE setId=? OR productId=?', [id, id]);
+        await connection.execute('DELETE FROM productsImages WHERE productId=?', [id]);
+        await connection.execute('DELETE FROM sales WHERE productId=?', [id]);
         const [result] = await connection.execute('DELETE FROM products WHERE id=?', [id]);
         res = result?.affectedRows > 0 ? {
             code: 204,
@@ -518,204 +498,215 @@ exports.removeProduct = removeProduct;
 /**
  *
  * @param fastify
- * @param data {
- *  products: number[]
- * }
+ * @param id
+ * @param status
  * @returns {
  *  code: number,
  *  message: string,
  * }
-*/
-const removeProducts = async (fastify, data) => {
+ */
+const updateOnSalesStatus = async (fastify, id, status) => {
     const connection = await fastify['mysql'].getConnection();
     let res = { code: 200, message: "OK." };
     try {
-        let args = '';
-        for (const id of data.products) {
-            args = args.concat(`${id},`);
-        }
-        args = args.substring(0, args.length - 1);
-        await connection.execute(`DELETE FROM productsCategories WHERE productId IN (${args})`);
-        await connection.execute(`DELETE FROM productsColors WHERE productId IN (${args})`);
-        await connection.execute(`DELETE FROM productsFinishes WHERE productId IN (${args})`);
-        await connection.execute(`DELETE FROM productsImages WHERE productId IN (${args})`);
-        await connection.execute(`DELETE FROM productsSizes WHERE productId IN (${args})`);
-        await connection.execute(`DELETE FROM productsTags WHERE productId IN (${args})`);
-        const [result] = await connection.execute(`DELETE FROM products WHERE id IN (${args})`);
-        res = result?.affectedRows > 0 ? {
-            code: 204,
-            message: `Products deleted.`
-        } : {
-            code: 500,
-            message: "Internal Server Error."
-        };
+        const [result] = await connection.execute(`UPDATE products SET onSales = ? WHERE id = ?`, [status ? 1 : 0, id]);
+        res = result?.affectedRows > 0
+            ? { code: 200, message: `Sales status updated.` }
+            : { code: 404, message: "Product not found." };
     }
     catch (err) {
         console.error(err);
-        res = {
-            code: 500,
-            message: "Internal Server Error."
-        };
+        res = { code: 500, message: "Internal Server Error." };
     }
     finally {
         connection.release();
         return res;
     }
 };
-exports.removeProducts = removeProducts;
+exports.updateOnSalesStatus = updateOnSalesStatus;
 /**
  *
  * @param fastify
- * @returns {
- *  id: number
- *  name: string
- *  code?: string
- *  description?: string
- *  variation?: string
- *  color?: string
- *  colorId?: number
- *  size?: string
- *  finish?: string
- *  thickness?: string
- *  sequence?: number
- *  createdAt: Date
- *  updatedAt: Date
- *  images: string[]
- *  mockedImages: string[]
- *  categories: {
- *      categoryId: number,
- *      productId: number,
- *      name: string
- *  }[]
- * tags: {
- *      tagId: number,
- *      productId: number,
- *      name: string
- *  }[]
+ * @param data {
+ *  id number,
+ *  discountPrice: number
  * }
-*/
-const getProducts = async (fastify) => {
+ * @returns {
+ *  code: number,
+ *  message: string,
+ * }
+ */
+const updateDiscountPrice = async (fastify, data) => {
     const connection = await fastify['mysql'].getConnection();
-    let value = [];
+    let res = { code: 200, message: "OK." };
+    const { id, discountPrice } = data;
     try {
-        const [rows] = await connection.execute('SELECT DISTINCT p.*, pc.colorId FROM products p LEFT JOIN productsColors pc ON pc.productId = p.id ORDER BY p.updatedAt DESC;');
-        if (rows.length > 0) {
-            const productIds = rows.map((x) => x.id);
-            let args = '';
-            for (const id of productIds) {
-                args = args.concat(`${id},`);
-            }
-            args = args.substring(0, args.length - 1);
-            const [images] = await connection.query(`SELECT * FROM productsImages WHERE productId IN (${args}) AND isMocked = 0 ORDER BY productId;`);
-            const [mockedImages] = await connection.query(`SELECT * FROM productsImages WHERE productId IN (${args}) AND isMocked = 1 ORDER BY productId;`);
-            const [categories] = await connection.query(`SELECT pc.categoryId, pc.productId, c.name FROM productsCategories pc JOIN categories c ON c.id = pc.categoryId WHERE pc.productId IN (${args}) ORDER BY productId;`);
-            const [tags] = await connection.query(`SELECT pt.tagId, pt.productId, t.name FROM productsTags pt JOIN tags t ON t.id = pt.tagId WHERE pt.productId IN (${args}) ORDER BY productId;`);
-            value = rows.map((x) => {
-                const imgs = images.filter((y) => y.productId === x.id);
-                const imgList = imgs.length > 0 ? imgs.map((z) => (0, exports.formatImageUrl)(z.productName, z.productCode, z.sequence, z.type)) : [];
-                const mockedImgs = mockedImages.filter((y) => y.productId === x.id);
-                const mockedImgList = mockedImgs.length > 0 ? mockedImgs.map((z) => (0, exports.formatImageUrl)(z.productName, z.productCode, z.sequence, z.type)) : [];
-                const prdCats = categories.filter((y) => y.productId === x.id);
-                const categoryList = prdCats.length > 0 ? prdCats : [];
-                const prdTags = tags.filter((y) => y.productId === x.id);
-                const tagList = prdTags.length > 0 ? prdTags : [];
-                return {
-                    id: x.id,
-                    name: x.name,
-                    code: x.code,
-                    description: x.description,
-                    size: x.size,
-                    variation: x.variation,
-                    color: x.color,
-                    colorId: x.colorId,
-                    finish: x.finish,
-                    thickness: x.thickness,
-                    sequence: x.sequence,
-                    createdAt: x.createdAt,
-                    updatedAt: x.updatedAt,
-                    images: imgList,
-                    mockedImages: mockedImgList,
-                    categories: categoryList,
-                    tags: tagList,
-                };
-            });
-        }
+        const [result] = await connection.execute(`UPDATE products SET discountPrice = ? WHERE id = ?`, [discountPrice, id]);
+        res = result?.affectedRows > 0
+            ? { code: 200, message: `Discount price updated to ${discountPrice}.` }
+            : { code: 404, message: "Product not found." };
     }
     catch (err) {
         console.error(err);
+        res = { code: 500, message: "Internal Server Error." };
     }
     finally {
         connection.release();
-        return value;
+        return res;
     }
 };
-exports.getProducts = getProducts;
-/**
- *
- * @param fastify
- * @param id
- * @returns {
- *  id: number
- *  name: string
- *  code?: string
- *  description?: string
- *  variation?: string
- *  color?: string
- *  colorId?: number
- *  size?: number
- *  finish?: number
- *  thickness?: string
- *  sequence?: number
- *  images: string[]
- *  mockedImages: string[]
- *  categories: number[] (id)
- *  tags: number[] (id)
- * }
-*/
-const getProductDetailsById = async (fastify, id) => {
-    const connection = await fastify['mysql'].getConnection();
-    let value;
-    try {
-        const [rows] = await connection.query(`SELECT DISTINCT p.id, p.name, p.code, p.description, p.variation, p.color, pc.colorId, p.thickness, s.id AS size, f.id AS finish, p.sequence, p.createdAt, p.updatedAt FROM products p LEFT JOIN sizes s ON s.value = p.size LEFT JOIN finishes f ON f.name = p.finish LEFT JOIN productsColors pc ON pc.productId = p.id WHERE p.id =?;`, [id]);
-        const [images] = await connection.query(`SELECT * FROM productsImages WHERE productId =? AND isMocked = 0;`, [id]);
-        const [mockedImages] = await connection.query(`SELECT * FROM productsImages WHERE productId =? AND isMocked = 1;`, [id]);
-        const [categories] = await connection.query(`SELECT pc.categoryId, pc.productId, c.name FROM productsCategories pc JOIN categories c ON c.id = pc.categoryId WHERE pc.productId =?;`, [id]);
-        const [tags] = await connection.query(`SELECT pt.tagId, pt.productId, t.name FROM productsTags pt JOIN tags t ON t.id = pt.tagId WHERE pt.productId =?;`, [id]);
-        const imgList = images.length > 0 ? images.map((z) => (0, exports.formatImageUrl)(z.productName, z.productCode, z.sequence, z.type)) : [];
-        const mockedImgList = mockedImages.length > 0 ? mockedImages.map((z) => (0, exports.formatImageUrl)(z.productName, z.productCode, z.sequence, z.type)) : [];
-        const categoryList = categories.length > 0 ? categories.map((x) => x.categoryId) : [];
-        const tagList = tags.length > 0 ? tags.map((x) => x.tagId) : [];
-        value = {
-            id: rows[0].id,
-            name: rows[0].name,
-            code: rows[0].code,
-            description: rows[0].description,
-            size: rows[0].size,
-            variation: rows[0].variation,
-            color: rows[0].color,
-            colorId: rows[0].colorId,
-            finish: rows[0].finish,
-            thickness: rows[0].thickness,
-            sequence: rows[0].sequence,
-            createdAt: rows[0].createdAt,
-            updatedAt: rows[0].updatedAt,
-            images: imgList,
-            mockedImages: mockedImgList,
-            categories: categoryList,
-            tags: tagList,
-        };
-    }
-    catch (err) {
-        console.error(err);
-    }
-    finally {
-        connection.release();
-        return value;
-    }
-};
-exports.getProductDetailsById = getProductDetailsById;
-const formatImageUrl = (name, code, sequence, type) => {
-    return encodeURI(`https://lorenzaceramica.com/images/products/${name}/${code}-${sequence}.${type}`);
-};
-exports.formatImageUrl = formatImageUrl;
+exports.updateDiscountPrice = updateDiscountPrice;
+// /**
+//  *
+//  * @param fastify
+//  * @returns {
+//  *  id: number
+//  *  name: string
+//  *  code?: string
+//  *  description?: string
+//  *  remarks?: string
+//  *  price?: number
+//  *  isSoldOut?: boolean
+//  *  sequence?: number
+//  *  createdAt: Date
+//  *  images: string[]
+//  *  categories: {
+//  *      categoryId: number,
+//  *      productId: number,
+//  *      name: string
+//  *  }[]
+//  * }
+// */
+// export const getProducts = async (fastify: FastifyInstance) => {
+//     const connection = await fastify['mysql'].getConnection();
+//     let value: any = [];
+//     try {
+//         const [rows] = await connection.execute(`
+//                 SELECT id, name, productDescription, price, remarks, sequence, code, createdAt, updatedAt, isSoldOut
+//                 FROM products
+//                 ORDER BY updatedAt DESC
+//             `);
+//         if (rows.length > 0) {
+//             const productIds: number[] = rows.map((x: any) => x.id);
+//             const args = productIds.join(',');
+//             const [images] = await connection.query(`
+//                 SELECT * FROM productsImages WHERE productId IN (${args}) ORDER BY productId
+//             `);
+//             // categories
+//             const [categories] = await connection.query(`
+//                 SELECT pc.categoryId, pc.productId, c.name
+//                 FROM productsCategories pc
+//                 JOIN categories c ON c.id = pc.categoryId
+//                 WHERE pc.productId IN (${args}) ORDER BY productId
+//             `);
+//             value = rows.map((x: any) => {
+//                 const imgs = images.filter((y: any) => y.productId === x.id);
+//                 const imgList = imgs.map((z: any) => formatImageUrl(z.productName, z.productCode, z.sequence, z.type));
+//                 const prdCats = categories.filter((y: any) => y.productId === x.id);
+//                 const categoryList = prdCats.length > 0 ? prdCats : [];
+//                 return {
+//                     id: x.id,
+//                     name: x.name,
+//                     description: x.productDescription,
+//                     price: x.price,
+//                     remarks: x.remarks,
+//                     sequence: x.sequence,
+//                     isSoldOut: x.isSoldOut,
+//                     code: x.code,
+//                     createdAt: x.createdAt,
+//                     images: imgList,
+//                     categories: categoryList,
+//                 }
+//             });
+//         }
+//     }
+//     catch (err) {
+//         console.error(err);
+//     }
+//     finally {
+//         connection.release();
+//         return value;
+//     }
+// }
+// /**
+//  *
+//  * @param fastify
+//  * @param id
+//  * @returns {
+//  *  id: number
+//  *  name: string
+//  *  code?: string
+//  *  description?: string
+//  *  variation?: string
+//  *  color?: string
+//  *  colorId?: number
+//  *  size?: number
+//  *  sequence?: number
+//  *  images: string[]
+//  *  categories: number[] (id)
+//  * }
+// */
+// export const getProductDetailsById = async (fastify: FastifyInstance, id: number) => {
+//     const connection = await fastify['mysql'].getConnection();
+//     let value: any;
+//     try {
+//         const [rows] = await connection.query(`
+//             SELECT DISTINCT p.id, p.name, p.productDescription, p.price, p.remarks, p.sequence, p.code, p.isSoldOut, p.createdAt, p.updatedAt
+//             FROM products p
+//             WHERE p.id = ?
+//         `, [id]);
+//         if (!rows || rows.length === 0) {
+//             return null;
+//         }
+//         const product = rows[0];
+//         const [images] = await connection.query(`
+//             SELECT id AS imageId, imageUrl, thumbnail
+//             FROM productsImages
+//             WHERE productId = ?
+//         `, [id]);
+//         const imageList = images.map((img: any) => ({
+//             id: img.imageId,
+//             url: formatImageUrl(img.productName, img.productCode, img.sequence, img.type),
+//             alt: `${product.name} Image ${img.sequence}`
+//         }));
+//         const [colors] = await connection.query(`
+//             SELECT c.id AS colorId, c.name AS color, c.value AS hexCode
+//             FROM productColors pc
+//             JOIN colors c ON c.id = pc.colorId
+//             WHERE pc.productId = ?
+//         `, [id]);
+//         const colorOptions = colors.map((c: any) => ({
+//             id: c.colorId,
+//             name: c.color,
+//             value: c.hexCode
+//         }));
+//         const [sizes] = await connection.query(`
+//             SELECT s.id AS sizeId, s.name AS sizeName, s.value AS sizeValue
+//             FROM productsSizes ps
+//             JOIN sizes s ON s.id = ps.sizeId
+//             WHERE ps.productId = ?
+//         `, [id]);
+//         const sizeOptions = sizes.map((s: any) => ({
+//             id: s.sizeId,
+//             name: s.sizeName,
+//             value: s.sizeValue
+//         }));
+//         value = {
+//             id: product.id,
+//             name: product.name,
+//             price: `RM ${product.price.toFixed(2)}`,
+//             description: product.productDescription,
+//             images: imageList,
+//             colorOptions,
+//             sizeOptions
+//         };
+//     }
+//     catch (err) {
+//         console.error(err);
+//     }
+//     finally {
+//         connection.release();
+//         return value;
+//     }
+// }
 //# sourceMappingURL=products.js.map

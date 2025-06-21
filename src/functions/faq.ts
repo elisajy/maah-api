@@ -19,15 +19,8 @@ export const getAllFAQ = async (fastify: FastifyInstance) => {
     let value: any;
 
     try {
-        // const [rows] = await connection.query('SELECT * FROM faqSections ORDER BY updatedAt DESC');
         const [rows] = await connection.query('SELECT * FROM faq ORDER BY updatedAt DESC');
 
-        // value = rows.map((x: any) => {
-        //     return {
-        //         ...x,
-        //         questions: qRows.filter((y: any) => y.sectionId === x.id),
-        //     }
-        // });
         value = rows
     }
     finally {
@@ -184,14 +177,13 @@ export const getAllFAQ = async (fastify: FastifyInstance) => {
  *  name: string
  *  value: string
  *  sequence: number
- *  sectionId: number
  * }
  * @returns {
  *  code: number,
  *  message: string,
  * }
  */
-export const createQuestion = async (fastify: FastifyInstance, data: any) => {
+export const createFaq = async (fastify: FastifyInstance, data: any) => {
     const connection = await fastify['mysql'].getConnection();
     let res: { code: number, message: string } = { code: 200, message: "OK." };
 
@@ -203,7 +195,7 @@ export const createQuestion = async (fastify: FastifyInstance, data: any) => {
                 code: 409,
                 message: 'FAQ existed.'
             }
-            return;
+            return res;
         }
 
         const [result] = await connection.execute('INSERT INTO faq (name,value,sequence) VALUES (?,?,?)',
@@ -286,7 +278,7 @@ export const createQuestion = async (fastify: FastifyInstance, data: any) => {
  *  message: string,
  * }
  */
-export const updateQuestion = async (fastify: FastifyInstance, data: any) => {
+export const updateFaq = async (fastify: FastifyInstance, data: any) => {
     const connection = await fastify['mysql'].getConnection();
     let res: { code: number, message: string } = { code: 200, message: "OK." };
 
@@ -365,43 +357,27 @@ export const updateQuestion = async (fastify: FastifyInstance, data: any) => {
 /**
  * 
  * @param fastify 
- * @param data { 
- *  name: number[]
- * }
+ * @param id number
  * @returns {
  *  code: number,
  *  message: string,
  * }
  */
-export const deleteQuestions = async (fastify: FastifyInstance, data: any) => {
+export const deleteFaq = async (fastify: FastifyInstance, id: number) => {
     const connection = await fastify['mysql'].getConnection();
-    let res: { code: number, message: string } = { code: 200, message: "OK." };
+    let res = { code: 200, message: "OK." };
 
     try {
-        let args = '';
-        for (const id of data.questions) {
-            args = args.concat(`${id},`);
-        }
+        const [result] = await connection.execute(`DELETE FROM faq WHERE id = ?`, [id]);
 
-        args = args.substring(0, args.length - 1);
-        const [result] = await connection.execute(`DELETE FROM faq WHERE id IN (${args})`);
+        res = result.affectedRows > 0
+            ? { code: 204, message: "FAQ deleted." }
+            : { code: 404, message: "FAQ not found." }
 
-        res = result?.affectedRows > 0 ? {
-            code: 204,
-            message: `FAQ deleted.`
-        } : {
-            code: 500,
-            message: "Internal Server Error."
-        };
-    }
-    catch (err) {
+    } catch (err) {
         console.error(err);
-        res = {
-            code: 500,
-            message: "Internal Server Error."
-        };
-    }
-    finally {
+        res = { code: 500, message: "Internal Server Error." };
+    } finally {
         connection.release();
         return res;
     }

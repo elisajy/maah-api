@@ -5,14 +5,8 @@ const functions_1 = require("../functions");
 async function productsImagesRoute(fastify) {
     fastify.post("/upload-products-images/:id", async (request, reply) => {
         const { id } = request.params;
-        const images = request.files({ limits: { fileSize: 10000000 } });
-        const result = await (0, functions_1.uploadProductsImages)(fastify, id, images);
-        reply.code(result?.code).send({ message: result?.message });
-    });
-    fastify.post("/upload-mocked-images/:id", async (request, reply) => {
-        const { id } = request.params;
-        const images = request.files({ limits: { fileSize: 10000000 } });
-        const result = await (0, functions_1.uploadMockedImages)(fastify, id, images);
+        const images = request.parts();
+        const result = await (0, functions_1.uploadProductsImages)(fastify, Number(id), images);
         reply.code(result?.code).send({ message: result?.message });
     });
     fastify.post("/delete-products-images", async (request, reply) => {

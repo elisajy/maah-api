@@ -8,9 +8,9 @@ const generateToken = (user, fastify) => {
         id: user.id
     };
     const signOptions = {
-        issuer: 'LorenzaCeramica',
+        issuer: 'Maahstudio',
         subject: user.username,
-        audience: 'lorenzaceramica.com',
+        audience: 'maahstudio.com',
         algorithm: 'RS256',
         expiresIn: '8h',
     };
